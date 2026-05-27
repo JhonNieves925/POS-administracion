@@ -63,6 +63,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Endpoints públicos (no requieren token)
                 .requestMatchers("/api/auth/**").permitAll()
+                // Health check — permite que Render y el frontend puedan despertar el servidor
+                .requestMatchers("/api/health").permitAll()
 
                 // Solo ADMIN puede gestionar usuarios y configuración
                 .requestMatchers("/api/usuarios/**").hasRole("ADMIN")

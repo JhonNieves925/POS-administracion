@@ -147,13 +147,17 @@
       <!-- Cargando -->
       <div v-if="catalogoCargando" class="catalogo-loading">
         <i class="pi pi-spin pi-spinner" style="font-size:2rem; color:#1565C0" />
-        <span>Cargando productos desde Siigo...</span>
+        <span>{{ catalogoMensajeCarga }}</span>
+        <small style="color:#78909C; margin-top:4px">
+          La primera conexión puede demorar hasta 1 minuto si el servidor estaba inactivo.
+        </small>
       </div>
 
       <!-- Error carga -->
       <div v-else-if="catalogoError" class="catalogo-error">
         <i class="pi pi-exclamation-circle" />
         <span>{{ catalogoError }}</span>
+        <Button label="Reintentar" icon="pi pi-refresh" size="small" text @click="abrirCatalogo" style="margin-top:8px" />
       </div>
 
       <!-- Tabla catálogo -->
@@ -333,6 +337,7 @@ const syncResult = ref(null)
 const catalogoDialogVisible = ref(false)
 const catalogoCargando = ref(false)
 const catalogoError = ref('')
+const catalogoMensajeCarga = ref('Conectando con Siigo...')
 const catalogoProductos = ref([])
 const catalogoFiltro = ref('')
 const importandoCodigo = ref('')   // código del producto que se está importando ahora
@@ -440,19 +445,61 @@ function confirmarEliminar(p) {
   })
 }
 
+/**
+ * Hace un ping al health check para despertar el servidor en Render antes
+ * de una operación pesada. Si el servidor ya está despierto responde en <200ms.
+ * Si estaba dormido (cold start) puede tardar hasta 50s — lo esperamos aquí
+ * para que la operación principal no falle por timeout.
+ */
+async function despertarServidor(actualizarMensaje) {
+  const PING_TIMEOUT   = 65_000   // suficiente para el cold start de Render
+  const MAX_PING_INTENTOS = 3
+
+  for (let i = 1; i <= MAX_PING_INTENTOS; i++) {
+    try {
+      await api.get('/health', { timeout: PING_TIMEOUT })
+      return // servidor respondió — continuar con la operación real
+    } catch {
+      if (i < MAX_PING_INTENTOS) {
+        actualizarMensaje?.(`El servidor está iniciando... (intento ${i}/${MAX_PING_INTENTOS})`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    }
+  }
+  // Si el ping falla 3 veces dejamos que la operación real decida si falla o no
+}
+
+/**
+ * Despierta el servidor y luego hace la petición a Siigo con timeout extendido.
+ * Con este patrón de "warm-up + petición real" evitamos que el cold start
+ * de Render haga fallar las operaciones de sincronización.
+ */
+async function siigoPeticion(fn, actualizarMensaje) {
+  // Primero: despertar el servidor si estaba dormido
+  await despertarServidor(actualizarMensaje)
+  actualizarMensaje?.('Conectando con Siigo...')
+
+  // Luego: operación real con timeout razonable (servidor ya está despierto)
+  return fn(30_000)   // 30 s es suficiente una vez que el servidor está vivo
+}
+
 async function abrirCatalogo() {
   catalogoDialogVisible.value = true
   catalogoCargando.value = true
   catalogoError.value = ''
+  catalogoMensajeCarga.value = 'Conectando con Siigo...'
   catalogoProductos.value = []
   catalogoFiltro.value = ''
   importResult.value = null
   try {
-    const res = await api.get('/siigo/productos')
-    // La respuesta viene envuelta en ApiResponse { data: [...] }
-    catalogoProductos.value = res.data.data ?? res.data
+    const res = await siigoPeticion(
+      (timeout) => api.get('/siigo/productos', { timeout }),
+      (msg) => { catalogoMensajeCarga.value = msg }
+    )
+    catalogoProductos.value = res.data
   } catch (e) {
-    catalogoError.value = e.response?.data?.mensaje || 'No se pudo cargar el catálogo de Siigo'
+    catalogoError.value = e.response?.data?.mensaje
+      || (e.code === 'ECONNABORTED' ? 'El servidor tardó demasiado en responder. Intenta de nuevo en unos segundos.' : 'No se pudo cargar el catálogo de Siigo')
   } finally {
     catalogoCargando.value = false
   }
@@ -468,8 +515,10 @@ async function importarUno(producto) {
   importandoCodigo.value = producto.codigo
   importResult.value = null
   try {
-    const res = await api.post(`/siigo/sincronizar-producto?codigo=${encodeURIComponent(producto.codigo)}`)
-    const r = res.data.data ?? res.data
+    const res = await siigoPeticion(
+      (timeout) => api.post(`/siigo/sincronizar-producto?codigo=${encodeURIComponent(producto.codigo)}`, null, { timeout })
+    )
+    const r = res.data
     const ok = r.errores === 0
     let mensaje
     if (!ok) {
@@ -492,7 +541,9 @@ async function importarUno(producto) {
   } catch (e) {
     importResult.value = {
       ok: false,
-      mensaje: e.response?.data?.mensaje || 'Error al conectar con el servidor'
+      mensaje: e.code === 'ECONNABORTED'
+        ? 'Tiempo de espera agotado. Intenta de nuevo.'
+        : e.response?.data?.mensaje || 'Error al conectar con el servidor'
     }
   } finally {
     importandoCodigo.value = ''
@@ -517,7 +568,9 @@ async function ejecutarSync() {
   syncLoading.value = true
   syncResult.value = null
   try {
-    const res = await api.post('/siigo/sincronizar-productos')
+    const res = await siigoPeticion(
+      (timeout) => api.post('/siigo/sincronizar-productos', null, { timeout })
+    )
     syncResult.value = res.data
     syncDialogVisible.value = true
     // Recargar lista para ver los nuevos productos
@@ -526,8 +579,10 @@ async function ejecutarSync() {
     toast.add({
       severity: 'error',
       summary: 'Error de sincronización',
-      detail: e.response?.data?.mensaje || 'No se pudo sincronizar con Siigo',
-      life: 6000
+      detail: e.code === 'ECONNABORTED'
+        ? 'El servidor tardó demasiado. El servidor puede estar iniciando — espera 30 segundos e intenta de nuevo.'
+        : e.response?.data?.mensaje || 'No se pudo sincronizar con Siigo',
+      life: 8000
     })
   } finally {
     syncLoading.value = false

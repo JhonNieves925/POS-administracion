@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -76,7 +77,17 @@ public class RealSiigoService implements SiigoPort {
     @Value("${siigo.api.iva5-id:4}")
     private int iva5Id;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    // RestTemplate con timeouts explícitos para no colgar en caso de lentitud de Siigo.
+    // connectTimeout: tiempo máximo para establecer la conexión TCP.
+    // readTimeout:    tiempo máximo esperando la respuesta una vez conectado.
+    private final RestTemplate restTemplate = crearRestTemplate();
+
+    private static RestTemplate crearRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);  // 10 s para conectar
+        factory.setReadTimeout(30_000);     // 30 s para leer respuesta
+        return new RestTemplate(factory);
+    }
 
     // Token en caché: se renueva si expiró
     private String cachedToken;
