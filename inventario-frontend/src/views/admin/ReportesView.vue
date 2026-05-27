@@ -701,6 +701,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
+import { useAuthStore } from '@/stores/auth'
 import api from '@/api/axios'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -711,13 +712,28 @@ import ToggleButton from 'primevue/togglebutton'
 
 const toast = useToast()
 const route = useRoute()
+const auth  = useAuthStore()
+
+// ── Control de acceso por rol ─────────────────────────────────────────────
+// ADMIN     → todos los reportes
+// AUXILIAR  → solo los operativos (sin cifras de ganancia ni costos)
+const TABS_ADMIN = ['ventas','inventario','devoluciones','ganancias','kardex']
+const TABS_COMUNES = ['estado-cuenta','relacion-ventas','nulas']
+
+const tabsPermitidos = computed(() =>
+  auth.esAdmin ? [...TABS_ADMIN, ...TABS_COMUNES] : TABS_COMUNES
+)
 
 // Sincroniza el tab activo con ?tab=xxx en la URL (vía submenú del sidebar)
+// Si el tab pedido no está permitido para este rol, aterriza en el primero permitido
 const tabsValidos = ['ventas','inventario','devoluciones','ganancias','kardex','estado-cuenta','relacion-ventas','nulas']
-const activeTab = ref(tabsValidos.includes(route.query.tab) ? route.query.tab : 'ventas')
+const resolverTab = (tab) =>
+  tabsPermitidos.value.includes(tab) ? tab : tabsPermitidos.value[0]
+
+const activeTab = ref(resolverTab(tabsValidos.includes(route.query.tab) ? route.query.tab : 'estado-cuenta'))
 
 watch(() => route.query.tab, (tab) => {
-  if (tab && tabsValidos.includes(tab)) activeTab.value = tab
+  if (tab && tabsValidos.includes(tab)) activeTab.value = resolverTab(tab)
 })
 const loading = ref(false)
 const vendedores = ref([])
@@ -757,16 +773,22 @@ const kardexTotales = computed(() => {
   }, {})
 })
 
-const tabs = [
-  { id: 'ventas',          label: 'Ventas',             icon: 'pi pi-chart-line' },
-  { id: 'inventario',      label: 'Inventario',         icon: 'pi pi-box' },
-  { id: 'devoluciones',    label: 'Devoluciones',       icon: 'pi pi-replay' },
-  { id: 'ganancias',       label: 'Ganancias',          icon: 'pi pi-dollar' },
-  { id: 'kardex',          label: 'Kardex',             icon: 'pi pi-arrows-v' },
-  { id: 'estado-cuenta',   label: 'Estado de Cuenta',  icon: 'pi pi-wallet' },
-  { id: 'relacion-ventas', label: 'Relación de Ventas', icon: 'pi pi-book' },
-  { id: 'nulas',          label: 'Nulas',              icon: 'pi pi-ban' }
+// Definición completa — se filtra por rol antes de mostrarse
+const TODOS_LOS_TABS = [
+  { id: 'ventas',          label: 'Ventas',              icon: 'pi pi-chart-line',  soloAdmin: true  },
+  { id: 'inventario',      label: 'Inventario',          icon: 'pi pi-box',         soloAdmin: true  },
+  { id: 'devoluciones',    label: 'Devoluciones',        icon: 'pi pi-replay',      soloAdmin: true  },
+  { id: 'ganancias',       label: 'Ganancias',           icon: 'pi pi-dollar',      soloAdmin: true  },
+  { id: 'kardex',          label: 'Kardex',              icon: 'pi pi-arrows-v',    soloAdmin: true  },
+  { id: 'estado-cuenta',   label: 'Estado de Cuenta',   icon: 'pi pi-wallet',      soloAdmin: false },
+  { id: 'relacion-ventas', label: 'Relación de Ventas',  icon: 'pi pi-book',        soloAdmin: false },
+  { id: 'nulas',           label: 'Nulas',               icon: 'pi pi-ban',         soloAdmin: false }
 ]
+
+// Solo muestra los tabs que el rol actual puede ver
+const tabs = computed(() =>
+  TODOS_LOS_TABS.filter(t => !t.soloAdmin || auth.esAdmin)
+)
 
 const ahora = new Date()
 const filtros = ref({

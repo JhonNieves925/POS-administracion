@@ -24,6 +24,7 @@ public class ReporteController {
     private final ReporteService reporteService;
     private final ExcelService excelService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/ventas")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> reporteVentas(
             @RequestParam(required = false)
@@ -41,6 +42,7 @@ public class ReporteController {
         );
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/inventario")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> reporteInventario() {
         return ResponseEntity.ok(
@@ -48,6 +50,7 @@ public class ReporteController {
         );
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/devoluciones")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> reporteDevoluciones(
             @RequestParam(required = false)
@@ -70,6 +73,7 @@ public class ReporteController {
      * Retorna: ingresoTotal, costoTotal, gananciaTotal, margen%, IVA, IBUA
      * Con detalle=true incluye desglose por producto ordenado por ganancia.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/ganancias")
     public ResponseEntity<ApiResponse<Map<String, Object>>> reporteGanancias(
             @RequestParam(required = false)
@@ -89,6 +93,7 @@ public class ReporteController {
      * GET /api/reportes/kardex?desde=&hasta=
      * Kardex: stock inicial, entradas (compras), ventas netas, stock final — en cajas.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/kardex")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> reporteKardex(
             @RequestParam(required = false)
@@ -137,6 +142,7 @@ public class ReporteController {
         );
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/ventas/excel")
     public ResponseEntity<byte[]> exportarVentasExcel(
             @RequestParam(required = false)

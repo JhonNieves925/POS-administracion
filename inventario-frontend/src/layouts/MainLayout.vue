@@ -196,14 +196,18 @@ const menuItems = computed(() => {
       icon: 'pi pi-chart-line',
       label: 'Reportes',
       children: [
-        { to: '/reportes?tab=ventas',          icon: 'pi pi-chart-line',  label: 'Ventas' },
-        { to: '/reportes?tab=inventario',      icon: 'pi pi-box',         label: 'Inventario' },
-        { to: '/reportes?tab=devoluciones',    icon: 'pi pi-replay',      label: 'Devoluciones' },
-        { to: '/reportes?tab=ganancias',       icon: 'pi pi-dollar',      label: 'Ganancias' },
-        { to: '/reportes?tab=kardex',          icon: 'pi pi-arrows-v',    label: 'Kardex' },
-        { to: '/reportes?tab=estado-cuenta',   icon: 'pi pi-wallet',      label: 'Estado de Cuenta' },
-        { to: '/reportes?tab=relacion-ventas', icon: 'pi pi-book',        label: 'Relación de Ventas' },
-        { to: '/reportes?tab=nulas',           icon: 'pi pi-ban',         label: 'Nulas' },
+        // ── Solo ADMIN: cifras financieras de la empresa ──────────
+        ...(auth.esAdmin ? [
+          { to: '/reportes?tab=ventas',          icon: 'pi pi-chart-line', label: 'Ventas' },
+          { to: '/reportes?tab=inventario',      icon: 'pi pi-box',        label: 'Inventario' },
+          { to: '/reportes?tab=devoluciones',    icon: 'pi pi-replay',     label: 'Devoluciones' },
+          { to: '/reportes?tab=ganancias',       icon: 'pi pi-dollar',     label: 'Ganancias' },
+          { to: '/reportes?tab=kardex',          icon: 'pi pi-arrows-v',   label: 'Kardex' },
+        ] : []),
+        // ── ADMIN y AUXILIAR: reportes operativos ─────────────────
+        { to: '/reportes?tab=estado-cuenta',   icon: 'pi pi-wallet', label: 'Estado de Cuenta' },
+        { to: '/reportes?tab=relacion-ventas', icon: 'pi pi-book',   label: 'Relación de Ventas' },
+        { to: '/reportes?tab=nulas',           icon: 'pi pi-ban',    label: 'Nulas' },
       ]
     },
   ]
