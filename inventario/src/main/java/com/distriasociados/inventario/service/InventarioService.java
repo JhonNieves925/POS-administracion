@@ -59,15 +59,49 @@ public class InventarioService {
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
         compra.setTotal(total);
 
+        // ── CUFE: anti-duplicado — si viene CUFE, verificar que no exista ya ──────
+        if (compra.getCufe() != null && !compra.getCufe().isBlank()) {
+            String cufe = compra.getCufe().trim().toLowerCase();
+            compra.setCufe(cufe);
+            if (compraRepository.existsByCufe(cufe)) {
+                throw new RuntimeException(
+                    "Esta factura ya fue registrada anteriormente (CUFE duplicado). " +
+                    "No es posible contabilizar la misma factura dos veces.");
+            }
+        }
+
+        // ── CORRECCIÓN: enlazar cada detalle con la compra padre ANTES de persistir.
+        // El JSON del frontend no incluye el campo 'compra' en cada detalle (evita ciclo),
+        // por lo que Hibernate lo recibe null y falla con NOT NULL constraint en compra_id.
+        // Al setearlo aquí, JPA gestiona correctamente la FK al hacer el INSERT en cascada.
+        for (CompraDetalle detalle : compra.getDetalles()) {
+            detalle.setCompra(compra);
+        }
+
         Compra compraGuardada = compraRepository.save(compra);
 
-        for (CompraDetalle detalle : compra.getDetalles()) {
-            detalle.setCompra(compraGuardada);
-            productoService.actualizarStock(detalle.getProducto().getId(), detalle.getCantidad());
+        for (CompraDetalle detalle : compraGuardada.getDetalles()) {
+            // Cargar el producto completo (necesitamos unidadesPorCaja para convertir cajas → unidades)
+            Producto prod = productoRepository.findById(detalle.getProducto().getId())
+                .orElseThrow(() -> new RuntimeException(
+                    "Producto no encontrado: " + detalle.getProducto().getId()));
+
+            // stockActual se lleva en UNIDADES (igual que en CargueService).
+            // getCantidad() viene en CAJAS → hay que multiplicar por unidadesPorCaja.
+            int unidadesIngresadas = detalle.getCantidad() * (prod.getUnidadesPorCaja() != null ? prod.getUnidadesPorCaja() : 1);
+            productoService.actualizarStock(prod.getId(), unidadesIngresadas);
+
+            // Actualizar precio de compra del producto para mantener el reporte de ganancias preciso.
+            // Con 200+ productos y precios que cambian por proveedor, esto evita actualizar a mano.
+            prod.setPrecioCompra(detalle.getPrecioCaja());
+            productoRepository.save(prod);
+
             registrarMovimiento(
-                TipoMovimiento.COMPRA, detalle.getProducto(), detalle.getCantidad(),
+                TipoMovimiento.COMPRA, prod, unidadesIngresadas,
                 detalle.getPrecioCaja(), compraGuardada.getId(), "COMPRA",
-                "Compra a proveedor: " + compra.getProveedor(), usuarioActual
+                "Compra a proveedor: " + compra.getProveedor() +
+                " (" + detalle.getCantidad() + " cajas × " + prod.getUnidadesPorCaja() + " uds)",
+                usuarioActual
             );
         }
 

@@ -1,7 +1,9 @@
 package com.distriasociados.inventario.controller;
 
 import com.distriasociados.inventario.dto.response.ApiResponse;
+import com.distriasociados.inventario.dto.response.FacturaDianResponse;
 import com.distriasociados.inventario.entity.*;
+import com.distriasociados.inventario.service.DianService;
 import com.distriasociados.inventario.service.ExcelService;
 import com.distriasociados.inventario.service.InventarioService;
 import com.distriasociados.inventario.service.UsuarioService;
@@ -13,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +30,7 @@ public class InventarioController {
     private final InventarioService inventarioService;
     private final UsuarioService usuarioService;
     private final ExcelService excelService;
+    private final DianService dianService;
 
     // Listar todos los productos con su stock
     @GetMapping
@@ -111,6 +116,47 @@ public class InventarioController {
             @RequestParam("file") MultipartFile file) {
         Map<String, Object> resultado = excelService.importarInventario(file);
         return ResponseEntity.ok(ApiResponse.ok("Importacion completada", resultado));
+    }
+
+    // ── Importación DIAN ─────────────────────────────────────────────────────────
+
+    /**
+     * Paso 1 — Validar CUFE y cargar sugerencias del historial.
+     * El auxiliar pega el CUFE copiado del reporte Excel de la DIAN.
+     * Responde: si el CUFE ya fue registrado (duplicado) y sugerencias de productos.
+     */
+    @PostMapping("/compras/consultar-cufe")
+    public ResponseEntity<ApiResponse<FacturaDianResponse>> consultarCufe(
+            @RequestBody Map<String, String> body) {
+        String cufe = body.getOrDefault("cufe", "").trim();
+        FacturaDianResponse resultado = dianService.consultarPorCufe(cufe);
+        return ResponseEntity.ok(ApiResponse.ok("CUFE validado", resultado));
+    }
+
+    /**
+     * Paso 1 alternativo — Parsear el XML UBL 2.1 de la factura electrónica.
+     * Cuando el auxiliar logra obtener el archivo XML (descargado del portal DIAN
+     * o enviado por el proveedor), este endpoint lo procesa completamente:
+     * extrae proveedor, N° factura, fecha, total y todas las líneas de producto.
+     */
+    @PostMapping("/compras/importar-xml")
+    public ResponseEntity<ApiResponse<FacturaDianResponse>> importarXml(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        byte[] xmlBytes = file.getBytes();
+        FacturaDianResponse resultado = dianService.parsearXml(xmlBytes);
+        return ResponseEntity.ok(ApiResponse.ok("XML procesado", resultado));
+    }
+
+    /**
+     * Sugerencias de productos para un proveedor específico
+     * (historial de lo que se le ha comprado anteriormente).
+     * El nombre puede ser parcial: "coca" encuentra "Coca-Cola FEMSA".
+     */
+    @GetMapping("/compras/sugerencias-proveedor")
+    public ResponseEntity<ApiResponse<List<FacturaDianResponse.ProductoSugerido>>> sugerenciasProveedor(
+            @RequestParam("nombre") String nombre) {
+        var sugerencias = dianService.obtenerSugerencias(nombre);
+        return ResponseEntity.ok(ApiResponse.ok("Sugerencias cargadas", sugerencias));
     }
 
     @GetMapping("/compras")

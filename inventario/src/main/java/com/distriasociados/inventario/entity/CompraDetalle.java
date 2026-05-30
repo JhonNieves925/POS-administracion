@@ -1,5 +1,6 @@
 package com.distriasociados.inventario.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +22,7 @@ public class CompraDetalle {
 
     @ManyToOne
     @JoinColumn(name = "compra_id", nullable = false)
+    @JsonIgnore   // corta la referencia circular Compra ↔ CompraDetalle al serializar JSON
     private Compra compra;
 
     @ManyToOne

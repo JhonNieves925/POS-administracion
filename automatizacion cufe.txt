@@ -1,0 +1,12 @@
+Manual:
+
+Hacer el proceso de descargar reportes de facturas emitidas y recibidas en el portal de la DIAN ( reporte DIAN)
+ 
+Luego filtrar en el Excel que genera la DIAN las facturas recibidas, que son las facturas de compra que le ha realizado a la empresa
+
+Automatización 
+
+Se requiere que con el cuffe busquen y descargue la factura de compra que se va a contabilizar en el software. Que lea la factura donde estara el nombre de la empresa, el número de factura, el nombre del producto, cantidad, impuestos y valor total.
+Y que una vez haga eso el software sepa a qué producto corresponde y que aumente las cantidad de lo que se ha comprado. 
+
+Que también se pueda editar la factura de compra si de pronto la contabilizacion la hace mal

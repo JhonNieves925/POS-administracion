@@ -8,6 +8,7 @@ import com.distriasociados.inventario.repository.RemisionRepository;
 import com.distriasociados.inventario.service.facturacion.SiigoPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,13 @@ public class FacturacionElectronicaService {
     private final FacturaRepository  facturaRepository;
     private final SiigoPort siigoPort;
     private final PdfService pdfService;
+
+    /**
+     * Inyección opcional: si el servidor de correo no está configurado (ej. dev sin SendGrid),
+     * el bean puede no existir y la facturación sigue funcionando sin problema.
+     */
+    @Autowired(required = false)
+    private EmailService emailService;
 
     // NIT reservado para ventas sin cliente identificado
     private static final String NIT_CONSUMIDOR_FINAL = "222222222222";
@@ -143,6 +151,10 @@ public class FacturacionElectronicaService {
                 // Crear UNA sola Factura compartida por todas las remisiones CF
                 crearYVincularFactura(cf, result, fecha);
                 cf.forEach(r -> marcarFacturada(r, result.getSiigoId(), result.getNumeroFactura()));
+                // CF consolidado: enviar correo por cada remisión (el guard de envioCorreo filtrará las que no apliquen)
+                if (emailService != null) {
+                    cf.forEach(r -> emailService.enviarFacturaElectronica(r));
+                }
                 enviadas++;
                 log.info("[FACTURACION] CF consolidado {} → {} remisiones → {}",
                     fecha, cf.size(), result.getNumeroFactura());
@@ -161,6 +173,10 @@ public class FacturacionElectronicaService {
             if (result.isExito()) {
                 crearYVincularFactura(List.of(remision), result, remision.getFecha());
                 marcarFacturada(remision, result.getSiigoId(), result.getNumeroFactura());
+                // Enviar factura por correo al cliente (asíncrono, no bloquea)
+                if (emailService != null) {
+                    emailService.enviarFacturaElectronica(remision);
+                }
                 enviadas++;
                 log.info("[FACTURACION] {} → {} → {}",
                     remision.getNumero(), remision.getCliente().getNit(), result.getNumeroFactura());
@@ -201,6 +217,10 @@ public class FacturacionElectronicaService {
         if (result.isExito()) {
             crearYVincularFactura(List.of(remision), result, remision.getFecha());
             marcarFacturada(remision, result.getSiigoId(), result.getNumeroFactura());
+            // Reenviar correo también en reintentos exitosos
+            if (emailService != null) {
+                emailService.enviarFacturaElectronica(remision);
+            }
             return Map.of(
                 "exito", true,
                 "numeroFactura", result.getNumeroFactura(),

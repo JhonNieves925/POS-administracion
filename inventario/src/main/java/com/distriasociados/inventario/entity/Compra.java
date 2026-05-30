@@ -32,6 +32,14 @@ public class Compra {
     @Column(length = 50)
     private String numeroFacturaProveedor;  // Número de factura que trae el proveedor
 
+    /**
+     * CUFE de la factura electrónica (hash SHA-384, 96 caracteres hex).
+     * Se usa para detectar duplicados: no se puede registrar la misma factura dos veces.
+     * Null cuando la compra se registró manualmente sin CUFE.
+     */
+    @Column(length = 96, unique = true)
+    private String cufe;
+
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal total = BigDecimal.ZERO;
 
