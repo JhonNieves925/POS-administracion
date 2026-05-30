@@ -137,11 +137,11 @@
             />
             <div class="detalle-qty">
               <label>Cajas</label>
-              <InputNumber v-model="det.cantidadCajas" :min="0" @update:modelValue="calcDetalle(det)" style="width:90px" />
+              <InputNumber v-model="det.cantidadCajas" :min="0" @update:modelValue="calcDetalle(det)" class="w-full" inputClass="w-full" />
             </div>
             <div class="detalle-qty">
               <label>Unidades</label>
-              <InputNumber v-model="det.cantidadUnidades" :min="0" @update:modelValue="calcDetalle(det)" style="width:90px" />
+              <InputNumber v-model="det.cantidadUnidades" :min="0" @update:modelValue="calcDetalle(det)" class="w-full" inputClass="w-full" />
             </div>
             <div class="detalle-qty">
               <label>Total uds</label>
@@ -200,7 +200,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import api from '@/api/axios'
@@ -370,7 +370,7 @@ async function confirmarDuplicar() {
       life: 4000
     })
     dialogDuplicar.value = false
-    cargarDatos()
+    await cargarDatos()
   } catch (e) {
     dupError.value = e.response?.data?.mensaje || 'Error al duplicar'
   } finally {
@@ -382,7 +382,7 @@ async function marcarEnRuta(cargue) {
   try {
     await api.put(`/cargues/${cargue.id}/en-ruta`)
     toast.add({ severity: 'info', summary: 'En ruta', detail: `Cargue ${cargue.numero} marcado en ruta`, life: 3000 })
-    cargarDatos()
+    await cargarDatos()
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'No se pudo actualizar', life: 4000 })
   }
@@ -426,7 +426,7 @@ function confirmarEliminar(cargue) {
       try {
         await api.delete(`/cargues/${cargue.id}`)
         toast.add({ severity: 'success', summary: 'Eliminado', detail: `Cargue ${cargue.numero} eliminado`, life: 3000 })
-        cargarDatos()
+        await cargarDatos()
       } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'No se pudo eliminar', life: 4000 })
       }
@@ -450,7 +450,7 @@ function confirmarLimpiarTodo() {
           detail: `${res.data.carguesEliminados} cargues y ${res.data.remisionesEliminadas} remisiones eliminados`,
           life: 4000
         })
-        cargarDatos()
+        await cargarDatos()
       } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'No se pudo limpiar', life: 4000 })
       }
@@ -493,7 +493,7 @@ async function crearCargue() {
     await api.post('/cargues', payload)
     toast.add({ severity: 'success', summary: 'Cargue creado', detail: 'El cargue fue creado exitosamente', life: 3000 })
     dialogNuevo.value = false
-    cargarDatos()
+    await cargarDatos()
   } catch (e) {
     cargueError.value = e.response?.data?.mensaje || 'Error al crear el cargue'
   } finally {
@@ -519,7 +519,18 @@ async function cargarDatos() {
   }
 }
 
-onMounted(cargarDatos)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarDatos()
+}
+
+onMounted(() => {
+  cargarDatos()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>
@@ -559,12 +570,23 @@ onMounted(cargarDatos)
 .detalles-header h4 { margin: 0; color: #333; }
 
 .detalle-row {
-  display: flex; align-items: flex-end; gap: 0.75rem;
-  padding: 0.5rem 0; border-bottom: 1px solid #f5f5f5;
+  display: grid;
+  grid-template-columns: 1fr 105px 105px 70px 36px;
+  align-items: end;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f5f5f5;
 }
-.detalle-producto { flex: 1; min-width: 200px; }
-.detalle-qty { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: #666; }
-.detalle-total { font-size: 1rem; font-weight: 700; color: #D32F2F; padding: 0.4rem 0; }
+.detalle-producto { min-width: 0; }
+.detalle-qty {
+  display: flex; flex-direction: column;
+  gap: 0.2rem; font-size: 0.78rem; color: #666;
+  min-width: 0;
+}
+.detalle-qty label { font-weight: 600; white-space: nowrap; }
+.detalle-qty :deep(.p-inputnumber) { width: 100%; min-width: 0; }
+.detalle-qty :deep(.p-inputnumber-input) { width: 100% !important; min-width: 0; padding: 0.35rem 0.5rem; }
+.detalle-total { font-size: 1rem; font-weight: 700; color: #D32F2F; padding: 0.3rem 0; }
 
 .no-detalles { text-align: center; padding: 1.5rem; color: #aaa; font-size: 0.9rem; }
 

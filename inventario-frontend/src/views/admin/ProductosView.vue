@@ -309,7 +309,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import api from '@/api/axios'
@@ -410,14 +410,19 @@ async function guardarProducto() {
   guardando.value = true
   try {
     if (editando.value) {
-      await api.put(`/productos/${form.value.id}`, form.value)
+      const res = await api.put(`/productos/${form.value.id}`, form.value)
+      // Actualización inmediata en el array local
+      const idx = productos.value.findIndex(p => p.id === form.value.id)
+      if (idx !== -1) productos.value.splice(idx, 1, res.data)
       toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Producto actualizado correctamente', life: 3000 })
     } else {
-      await api.post('/productos', form.value)
+      const res = await api.post('/productos', form.value)
+      // Agregar al inicio del array sin esperar el GET
+      productos.value.unshift(res.data)
       toast.add({ severity: 'success', summary: 'Creado', detail: 'Producto creado correctamente', life: 3000 })
     }
     dialogVisible.value = false
-    cargarProductos()
+    cargarProductos() // recarga en segundo plano para consistencia
   } catch (e) {
     formError.value = e.response?.data?.mensaje || 'Error al guardar'
   } finally {
@@ -436,8 +441,10 @@ function confirmarEliminar(p) {
     accept: async () => {
       try {
         await api.delete(`/productos/${p.id}`)
+        // Eliminar del array inmediatamente sin esperar el GET
+        productos.value = productos.value.filter(x => x.id !== p.id)
         toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Producto eliminado', life: 3000 })
-        cargarProductos()
+        cargarProductos() // recarga en segundo plano para consistencia
       } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'No se pudo eliminar', life: 4000 })
       }
@@ -601,7 +608,18 @@ async function cargarProductos() {
   }
 }
 
-onMounted(cargarProductos)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarProductos()
+}
+
+onMounted(() => {
+  cargarProductos()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

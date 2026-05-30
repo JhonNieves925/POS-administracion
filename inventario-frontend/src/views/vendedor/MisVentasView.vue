@@ -85,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import api from '@/api/axios'
 import Tag from 'primevue/tag'
@@ -150,7 +150,18 @@ async function cargarRemisiones() {
   }
 }
 
-onMounted(cargarRemisiones)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarRemisiones()
+}
+
+onMounted(() => {
+  cargarRemisiones()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

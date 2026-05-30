@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import api from '@/api/axios'
 import DataTable from 'primevue/datatable'
@@ -178,14 +178,17 @@ async function guardar() {
   guardando.value = true
   try {
     if (editando.value) {
-      await api.put(`/usuarios/${form.value.id}`, form.value)
+      const res = await api.put(`/usuarios/${form.value.id}`, form.value)
+      const idx = usuarios.value.findIndex(u => u.id === form.value.id)
+      if (idx !== -1) usuarios.value.splice(idx, 1, res.data)
       toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Usuario actualizado', life: 3000 })
     } else {
-      await api.post('/usuarios', form.value)
+      const res = await api.post('/usuarios', form.value)
+      usuarios.value.unshift(res.data)
       toast.add({ severity: 'success', summary: 'Creado', detail: 'Usuario creado. Primer login activo.', life: 3000 })
     }
     dialogVisible.value = false
-    cargarUsuarios()
+    cargarUsuarios() // recarga en segundo plano para consistencia
   } catch (e) {
     formError.value = e.response?.data?.mensaje || 'Error al guardar'
   } finally {
@@ -219,9 +222,12 @@ async function confirmarReset() {
 
 async function toggleActivo(u) {
   try {
-    await api.put(`/usuarios/${u.id}/toggle-activo`)
+    const res = await api.put(`/usuarios/${u.id}/toggle-activo`)
+    // Actualización inmediata: reflejar el nuevo estado sin esperar el GET
+    const idx = usuarios.value.findIndex(x => x.id === u.id)
+    if (idx !== -1) usuarios.value.splice(idx, 1, res.data)
     toast.add({ severity: 'info', summary: 'Actualizado', detail: `Usuario ${u.activo ? 'desactivado' : 'activado'}`, life: 3000 })
-    cargarUsuarios()
+    cargarUsuarios() // recarga en segundo plano
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'Error', life: 4000 })
   }
@@ -239,7 +245,18 @@ async function cargarUsuarios() {
   }
 }
 
-onMounted(cargarUsuarios)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarUsuarios()
+}
+
+onMounted(() => {
+  cargarUsuarios()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

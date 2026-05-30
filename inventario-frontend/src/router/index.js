@@ -24,6 +24,12 @@ const routes = [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/admin/DashboardView.vue') },
       { path: 'productos', name: 'Productos', component: () => import('@/views/admin/ProductosView.vue') },
       { path: 'inventario', name: 'Inventario', component: () => import('@/views/admin/InventarioView.vue') },
+      {
+        path: 'compras',
+        name: 'Compras',
+        component: () => import('@/views/admin/ComprasView.vue'),
+        meta: { requiresAuth: true, roles: ['ADMIN'] }
+      },
       { path: 'cargues', name: 'Cargues', component: () => import('@/views/admin/CarguesView.vue') },
       { path: 'cargues/:id', name: 'DetalleCargue', component: () => import('@/views/admin/DetalleCargueView.vue') },
       { path: 'clientes', name: 'Clientes', component: () => import('@/views/admin/ClientesView.vue') },

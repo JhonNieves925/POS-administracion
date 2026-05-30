@@ -147,7 +147,7 @@
           <div class="conversor-inputs">
             <div class="conversor-campo">
               <label>{{ ajuste.tipo === 'CORRECCION' ? 'Cajas contadas' : 'Cajas' }}</label>
-              <InputNumber v-model="ajuste.cajas" :min="0" class="w-full" />
+              <InputNumber v-model="ajuste.cajas" :min="0" class="w-full" inputClass="w-full" />
             </div>
             <div class="conversor-sep">+</div>
             <div class="conversor-campo">
@@ -157,6 +157,7 @@
                 :min="0"
                 :max="(productoSeleccionado?.unidadesPorCaja ?? 999) - 1"
                 class="w-full"
+                inputClass="w-full"
               />
             </div>
           </div>
@@ -390,17 +391,17 @@ async function guardarAjuste() {
 
   guardando.value = true
   try {
+    let prodActualizado
     if (tipo === 'CORRECCION') {
-      // Fija el stock al valor exacto (conteo físico)
-      await api.put(`/inventario/${pid}/corregir`, { stockReal: uds, motivo })
+      const res = await api.put(`/inventario/${pid}/corregir`, { stockReal: uds, motivo })
+      prodActualizado = res.data
       toast.add({ severity: 'info', summary: 'Corrección registrada',
         detail: `Stock fijado en ${uds} unidades (${cajasEquiv.value} cajas)`, life: 3500 })
     } else {
-      // ENTRADA suma, SALIDA resta (enviamos negativo para salida)
       const delta = tipo === 'SALIDA' ? -uds : uds
-      await api.put(`/inventario/${pid}/ajustar`, { cantidad: delta, motivo })
-      const prod = productoSeleccionado.value
-      const nuevo = (prod?.stockActual ?? 0) + delta
+      const res = await api.put(`/inventario/${pid}/ajustar`, { cantidad: delta, motivo })
+      prodActualizado = res.data
+      const nuevo = prodActualizado?.stockActual ?? ((productoSeleccionado.value?.stockActual ?? 0) + delta)
       toast.add({
         severity: tipo === 'ENTRADA' ? 'success' : 'warn',
         summary: tipo === 'ENTRADA' ? '✅ Entrada registrada' : '⚠ Salida registrada',
@@ -409,7 +410,12 @@ async function guardarAjuste() {
       })
     }
     dialogAjuste.value = false
-    cargarInventario()
+    // Actualización inmediata: reemplazar el producto en el array sin esperar el GET
+    if (prodActualizado) {
+      const idx = inventario.value.findIndex(p => p.id === pid)
+      if (idx !== -1) inventario.value.splice(idx, 1, prodActualizado)
+    }
+    cargarInventario() // recarga en segundo plano para consistencia
   } catch (e) {
     ajusteError.value = e.response?.data?.mensaje || 'Error al ajustar'
   } finally {
@@ -597,21 +603,25 @@ onUnmounted(() => {
   color: #6d4c00;
 }
 .conversor-inputs {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
   gap: 0.75rem;
 }
 .conversor-campo {
-  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  overflow: hidden;
 }
 .conversor-campo label {
   font-size: 0.8rem;
   font-weight: 600;
   color: #555;
 }
+.conversor-campo :deep(.p-inputnumber) { width: 100%; min-width: 0; }
+.conversor-campo :deep(.p-inputnumber-input) { width: 100% !important; min-width: 0; }
 .conversor-sep {
   font-size: 1.5rem;
   font-weight: 700;

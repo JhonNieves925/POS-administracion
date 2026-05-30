@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import api from '@/api/axios'
 import Tag from 'primevue/tag'
@@ -223,7 +223,18 @@ async function cargarDatos() {
   }
 }
 
-onMounted(cargarDatos)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarDatos()
+}
+
+onMounted(() => {
+  cargarDatos()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

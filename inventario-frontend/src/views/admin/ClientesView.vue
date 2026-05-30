@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import api from '@/api/axios'
@@ -183,14 +183,18 @@ async function guardar() {
   guardando.value = true
   try {
     if (editando.value) {
-      await api.put(`/clientes/${form.value.id}`, form.value)
+      const res = await api.put(`/clientes/${form.value.id}`, form.value)
+      // Actualización optimista: reemplazar en la lista sin esperar un GET
+      const idx = clientes.value.findIndex(c => c.id === form.value.id)
+      if (idx !== -1) clientes.value.splice(idx, 1, res.data)
       toast.add({ severity: 'success', summary: 'Actualizado', detail: 'Cliente actualizado', life: 3000 })
     } else {
-      await api.post('/clientes', form.value)
+      const res = await api.post('/clientes', form.value)
+      // Inserción optimista: añadir al inicio sin esperar un GET
+      clientes.value.unshift(res.data)
       toast.add({ severity: 'success', summary: 'Creado', detail: 'Cliente creado', life: 3000 })
     }
     dialogVisible.value = false
-    cargarClientes()
   } catch (e) {
     formError.value = e.response?.data?.mensaje || 'Error al guardar'
   } finally {
@@ -209,8 +213,9 @@ function confirmarEliminar(c) {
     accept: async () => {
       try {
         await api.delete(`/clientes/${c.id}`)
+        // Eliminación optimista: quitar de la lista sin esperar un GET
+        clientes.value = clientes.value.filter(x => x.id !== c.id)
         toast.add({ severity: 'success', summary: 'Eliminado', detail: 'Cliente eliminado', life: 3000 })
-        cargarClientes()
       } catch (e) {
         toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.mensaje || 'No se pudo eliminar', life: 4000 })
       }
@@ -230,7 +235,18 @@ async function cargarClientes() {
   }
 }
 
-onMounted(cargarClientes)
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') cargarClientes()
+}
+
+onMounted(() => {
+  cargarClientes()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

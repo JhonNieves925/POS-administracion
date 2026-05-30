@@ -284,7 +284,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import api from '@/api/axios'
 import Select from 'primevue/select'
@@ -580,7 +580,20 @@ async function refrescarDisponibles() {
   } catch { /* silencioso */ }
 }
 
-onMounted(cargarDatos)
+function onVisibilityChange() {
+  // Al volver a la pestaña recarga clientes y cargue para ver datos nuevos
+  // sin tocar 'ventas' ni 'form' para no perder la venta en curso
+  if (document.visibilityState === 'visible') cargarDatos()
+}
+
+onMounted(() => {
+  cargarDatos()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>
